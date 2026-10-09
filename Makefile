@@ -35,10 +35,10 @@ BUILD := docker buildx build
 # PKGS must be the pkgs tag pinned by the target Talos release, from:
 #   https://raw.githubusercontent.com/siderolabs/talos/$(TALOS_VERSION)/pkg/machinery/gendata/data/pkgs
 # TOOLS must match TOOLS_REV in the pinned siderolabs/pkgs Pkgfile.
-TALOS_VERSION ?= v1.13.8
-PKGS ?= v1.13.0-55-gf677246
+TALOS_VERSION ?= v1.14.2
+PKGS ?= v1.14.0-37-g6c312e4
 PKGS_PREFIX ?= ghcr.io/siderolabs
-TOOLS ?= v1.13.0-8-gc2844e6
+TOOLS ?= v1.14.0-8-g9776960
 TOOLS_PREFIX ?= ghcr.io/siderolabs
 
 # Driver version single source of truth: vars.yaml
