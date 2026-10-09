@@ -63,16 +63,27 @@ EOF
 
 if ! compgen -G "$WORK/*installer*.tar" > /dev/null; then
   echo "==> building installer image with $IMAGER"
+  # imager CLI: positional arg = built-in base profile name ("installer" =
+  # OutKindInstaller, metal, amd64); extensions via repeatable flag; version
+  # defaults to the imager's own build tag (v1.14.2 here).
   podman run --rm --privileged --net=host -v "$WORK:/out:z" \
-    "$IMAGER" installer /out/profile.json
+    "$IMAGER" installer \
+    --system-extension-image="$AMD_UCODE" \
+    --system-extension-image="$REALTEK" \
+    --system-extension-image="$MODS" \
+    --system-extension-image="$FW" \
+    --system-extension-image="$TOOLKIT" \
+    --system-extension-image="$UINPUT"
 fi
-TAR=$(ls "$WORK"/*installer*.tar | head -1)
+TAR=$(ls "$WORK"/*.tar | head -1)
 echo "==> installer tarball: $TAR"
 
 echo "==> load + push as $DEST"
-podman load -i "$TAR"
-LOADED=$(podman images --format '{{.Repository}}:{{.Tag}}' | grep -m1 'installer.*amd64' || true)
-# imager names the image after the baseImage ref; retag to DEST
+LOADOUT=$(podman load -i "$TAR")
+echo "$LOADOUT"
+# imager names the image after the baseImage ref (e.g. ghcr.io/siderolabs/installer-base:v1.14.2)
+LOADED=$(echo "$LOADOUT" | sed -n 's/^Loaded image: //p' | head -1)
+[ -n "$LOADED" ] || { echo "!! could not determine loaded image name"; exit 1; }
 podman tag "$LOADED" "$DEST"
 podman push "$DEST"
 DIGEST=$(skopeo inspect --format '%{Digest}' "docker://$DEST")
