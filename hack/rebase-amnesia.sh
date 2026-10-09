@@ -86,7 +86,7 @@ LOADED=$(echo "$LOADOUT" | sed -n 's/^Loaded image: //p' | head -1)
 [ -n "$LOADED" ] || { echo "!! could not determine loaded image name"; exit 1; }
 podman tag "$LOADED" "$DEST"
 podman push "$DEST"
-DIGEST=$(skopeo inspect --format '%{Digest}' "docker://$DEST")
+DIGEST=$(skopeo inspect --format '{{ .Digest }}' "docker://$DEST")
 echo
 echo "==> pin in cogito talos/machineconfig/amnesia.yaml.j2:"
 echo "    image: ${DEST}@${DIGEST}"
