@@ -1,0 +1,84 @@
+# NVIDIA Container Toolkit v1.19.1: include Wine NGX bridges in NVML CDI mounts.
+# The DLLs sit beside the version-matched driver libraries, outside ld.so.cache.
+# Keep them separate from ELF/ldconfig discovery; absent DLLs remain optional.
+--- a/pkg/nvcdi/driver-nvml.go
++++ b/pkg/nvcdi/driver-nvml.go
+@@ -65,12 +65,29 @@
+ 
+ 	d := discover.Merge(
+ 		libraries,
++		l.newDriverWineLibrariesDiscoverer(libcudasoParentDirPath),
+ 		ipcs,
+ 		firmwares,
+ 		binaries,
+ 	)
+ 
+ 	return d, nil
++}
++
++// Wine's NGX bridge DLLs ship alongside the Linux driver libraries, but have
++// neither an ELF entry in ld.so.cache nor a .so.<version> filename. Mount them
++// separately so Proton can discover DLSS without copying DLLs into each app.
++func (l *nvcdilib) newDriverWineLibrariesDiscoverer(driverLibDir string) discover.Discover {
++	return discover.NewMounts(
++		l.logger,
++		lookup.NewFileLocator(
++			lookup.WithLogger(l.logger),
++			lookup.WithRoot(l.driver.Root),
++			lookup.WithSearchPaths(filepath.Join(driverLibDir, "nvidia", "wine")),
++		),
++		l.driver.Root,
++		[]string{"nvngx.dll", "_nvngx.dll"},
++	)
+ }
+ 
+ func (l *nvcdilib) newIPCDiscoverer() (discover.Discover, error) {
+--- /dev/null
++++ b/pkg/nvcdi/driver-wine_test.go
+@@ -0,0 +1,46 @@
++package nvcdi
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/NVIDIA/nvidia-container-toolkit/internal/lookup/root"
++	testlog "github.com/sirupsen/logrus/hooks/test"
++	"github.com/stretchr/testify/require"
++)
++
++func TestDriverWineLibrariesDiscoverer(t *testing.T) {
++	for _, tc := range []struct {
++		name   string
++		libDir string
++		files  []string
++		want   []string
++	}{
++		{"both bridges", "/usr/local/lib", []string{"nvngx.dll", "_nvngx.dll", "unrelated.dll"}, []string{"nvngx.dll", "_nvngx.dll"}},
++		{"no Wine files", "/usr/local/lib", nil, nil},
++		{"one bridge", "/usr/local/lib", []string{"nvngx.dll"}, []string{"nvngx.dll"}},
++		{"alternate libdir", "/usr/lib64", []string{"nvngx.dll", "_nvngx.dll"}, []string{"nvngx.dll", "_nvngx.dll"}},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			driverRoot := t.TempDir()
++			wineDir := filepath.Join(driverRoot, tc.libDir, "nvidia", "wine")
++			require.NoError(t, os.MkdirAll(wineDir, 0755))
++			for _, file := range tc.files {
++				require.NoError(t, os.WriteFile(filepath.Join(wineDir, file), []byte("bridge"), 0644))
++			}
++			logger, _ := testlog.NewNullLogger()
++			lib := nvcdilib{logger: logger, driver: root.New(root.WithDriverRoot(driverRoot))}
++			mounts, err := lib.newDriverWineLibrariesDiscoverer(tc.libDir).Mounts()
++			require.NoError(t, err)
++			require.Len(t, mounts, len(tc.want))
++			for i, file := range tc.want {
++				require.Equal(t, filepath.Join(wineDir, file), mounts[i].HostPath)
++				require.Equal(t, filepath.Join(tc.libDir, "nvidia", "wine", file), mounts[i].Path)
++				require.Contains(t, mounts[i].Options, "ro")
++				require.Contains(t, mounts[i].Options, "nosuid")
++				require.Contains(t, mounts[i].Options, "nodev")
++			}
++		})
++	}
++}

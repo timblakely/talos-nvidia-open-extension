@@ -27,10 +27,13 @@ steps:
       - |
         mkdir -p container-toolkit
         tar -xzf container-toolkit.tar.gz --strip-components=1 -C container-toolkit
+        # Upstream NVML CDI discovery does not include the Wine NGX DLLs.
+        patch -d container-toolkit -p1 < /pkg/files/driver-wine-cdi.patch
     build:
       - |
         cd container-toolkit
 
+        go test -mod=vendor ./pkg/nvcdi -run '^TestDriverWineLibrariesDiscoverer$'
         make cmds
     install:
       - |

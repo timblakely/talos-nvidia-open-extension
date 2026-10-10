@@ -22,6 +22,10 @@ steps:
         test -x /rootfs/usr/local/bin/nvidia-container-runtime
         test -x /rootfs/usr/local/bin/nvidia-persistenced-wrapper
         test -e /rootfs/etc/cri/conf.d/10-nvidia-container-runtime.part
+        if [ "{{ .ARCH }}" = "x86_64" ]; then
+          test -s /rootfs/usr/local/lib/nvidia/wine/nvngx.dll
+          test -s /rootfs/usr/local/lib/nvidia/wine/_nvngx.dll
+        fi
         test ! -e /rootfs/usr/lib/firmware
       - |
         mkdir -p /extensions-validator-rootfs

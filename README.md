@@ -169,6 +169,29 @@ Also re-pin `GLIBC_IMAGE` in `vars.yaml` from that release's bundle
 (`talosctl image talos-bundle <ver> | grep glibc`): the toolkit's glibc must
 match the glibc extension built for the same Talos release.
 
+## Proton DLSS and graphics device nodes
+
+On x86_64, `nvidia-open-toolkit` includes the matching driver's `nvngx.dll`
+and `_nvngx.dll` at `/usr/local/lib/nvidia/wine/`, beside the Linux driver
+libraries. The pinned container toolkit carries a small CDI discovery patch
+that mounts these two files read-only into NVIDIA containers. Proton finds
+them relative to `libGLX_nvidia.so.0` and copies them into game prefixes as
+needed. No Steam launch flags or manually retained per-game DLLs are needed
+for this packaging fix. The package build checks the DLLs against the
+extracted driver archive, and the toolkit build tests CDI path handling,
+read-only mounts, and hosts without Wine files.
+
+The udev rules also run `nvidia-modprobe -m` when `nvidia_modeset` loads,
+creating `/dev/nvidia-modeset` before it can be discovered for GPU containers.
+A loaded module without that node can produce black game windows and failed
+Vulkan present-mode queries even while the Steam UI works.
+
+After installing a rebuilt extension, check both DLLs and the modeset node
+on the host and in a fresh NVIDIA container, then launch a DLSS game through
+Proton. Existing Steam-volume workarounds should be removed only after this
+container-injection check passes. Publishing an extension image does not
+upgrade or reboot a Talos node; that remains a separate rollout.
+
 ## Usage
 
 See [`_docs/machine-config-example.yaml`](_docs/machine-config-example.yaml) for
